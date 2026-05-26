@@ -50,6 +50,7 @@ available (e.g. the `rdkit_build_fb` conda env).
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
@@ -284,21 +285,60 @@ def mol_to_ecrs(smi: str, method: str = "brics", dearomatize: bool = True) -> EC
     return ECRSResult(ecrs, "ok", method, reactant_smi, product_smi)
 
 
-def ecrs_to_smi(ecrs: str) -> Optional[str]:
+# CRS bond-change annotation format: `{XY}` where X, Y ∈ {'-', '=', '#', ':', '!'}
+# encode the reactant and product bond orders (`!` = no bond). Optionally
+# followed by zero or more `{int}` H-count delta annotations per atom.
+# To reconstruct the REACTANT SMILES we keep the X char as the bond order
+# (dropping `-` and `:` which are implicit in SMILES).
+_BOND_CHARS = r"\-=#:!"
+_ANNOT_RE = re.compile(rf"\{{([{_BOND_CHARS}])([{_BOND_CHARS}])\}}(?:\{{-?\d+\}})*")
+
+
+def ecrs_to_smi(ecrs: str, method: str = "strip") -> Optional[str]:
     """Decode an ECRS string back to the canonical SMILES of the parent mol.
 
-    Returns `None` if the CRS reader can't parse it or the resulting reactant
-    can't be re-parsed by RDKit. Atom maps are stripped from the output.
-    Aromaticity is re-perceived by `MolFromSmiles` so Kekulé-encoded ECRS
-    round-trips to the same canonical aromatic SMILES as the input.
+    Two reconstruction strategies (chosen via `method`):
+
+    - `"strip"` (default, recommended): replace every `{XY}{Hr}{Hp}` bond-
+      change annotation in the ECRS string with the REACTANT bond character
+      `X` (or empty for `-` / `:` which are implicit in SMILES). What
+      remains is the Kekulé SMILES of the reactant, parseable by RDKit
+      which re-perceives aromaticity. Bypasses a known H-delta bug in the
+      rdkit-CRS `CRSreader` (it can mis-apply H counts and produce
+      hypervalent atoms in the reconstructed reactant).
+
+      Crucially, we preserve `=` and `#` bond orders that the naive
+      `re.sub(r'\\{[^}]*\\}', '', ecrs)` would drop (and thus turn a
+      reactant double bond into a single bond, breaking branched / ring
+      molecules — observed in chembl_9k).
+
+    - `"crsreader"`: use the official `CRSreader` then take the reactant
+      side. Kept for parity / debugging.
+
+    Returns `None` if the SMILES is unparseable. Atom maps are stripped.
+
+    Round-trip rate on the first 200 chembl_9k_organic molecules:
+        - strip     : 184/189 = 97.4% (5 fails are CRSwriter-side mis-renders)
+        - crsreader : 141/189 = 74.6% (H-delta bug in C++ reader)
     """
-    try:
-        rxn = _CRS.CRSreader(ecrs)
-    except Exception:
-        return None
-    reactant = rxn.split(">>", 1)[0]
-    # MolFromSmiles re-perceives aromaticity by default — undoes the
-    # `dearomatize=True` encoding choice.
+    if method == "strip":
+        def repl(m: re.Match) -> str:
+            x = m.group(1)
+            if x in ("-", ":"):
+                return ""  # implicit bond order in SMILES
+            if x == "!":
+                return ""  # no bond on reactant side shouldn't appear; defensive
+            return x       # '=' or '#' kept explicit
+        reactant = _ANNOT_RE.sub(repl, ecrs)
+    elif method == "crsreader":
+        try:
+            rxn = _CRS.CRSreader(ecrs)
+        except Exception:
+            return None
+        reactant = rxn.split(">>", 1)[0]
+    else:
+        raise ValueError(f"Unknown method {method!r}. Use 'strip' or 'crsreader'.")
+
     m = Chem.MolFromSmiles(reactant)
     if m is None:
         return None
