@@ -1,0 +1,80 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ecrs"
+version = "0.1.0"
+description = "Extended Condensed Reaction String — single-string molecular representation via self-reaction fragmentation (SAFE-like, but reconstruction-exact via atom maps)"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Guillaume Godin", email = "guillaume@osmo.ai" },
+    { name = "Ruud van Deursen", email = "ruud.van.deursen@gmail.com" },
+]
+keywords = ["chemistry", "rdkit", "smiles", "fragmentation", "molecular-representation", "condensed-reaction-string", "generative-models"]
+requires-python = ">=3.9"
+dependencies = [
+    # `Atom.GetValence(ValenceType)` was introduced in 2025.03; we use it.
+    "rdkit>=2025.3",
+    "numpy>=1.24",
+    "scipy>=1.10",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/guillaume-osmo/ECRS"
+Issues = "https://github.com/guillaume-osmo/ECRS/issues"
+Source = "https://github.com/guillaume-osmo/ECRS"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ecrs"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/ecrs",
+    "tests",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml",
+]
+exclude = [
+    "cpp",
+    "*.so",
+    "__pycache__",
+]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]  # line length is enforced by formatter
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]  # allow asserts in tests

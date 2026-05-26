@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# C++ build artifacts (compile.sh outputs)
+cpp/ecrs
+cpp/rxnclean
+cpp/crsclean
+cpp/bal
+*.o
+*.dSYM/
+
+# Top-level legacy binaries (pre-restructure)
+/ecrs
+/rxnclean
+/bal
+
+# Data (training corpora, intermediate parquet, USPTO staging, results) —
+# code-only in this repo; data lives outside or in separate releases.
+data/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Per-user Claude Code settings (permissions, hooks) — not portable
+.claude/

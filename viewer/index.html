@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>CRS Clusters — Pistachio v7 · r=0..r=3 bundle</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script src="https://cdn.jsdelivr.net/npm/openchemlib@8.21.0/dist/openchemlib-full.js" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --card: #ffffff;
+    --border: #e1e4e8;
+    --text: #24292e;
+    --muted: #586069;
+    --accent: #0366d6;
+    --noop: #d73a49;
+    --stereo: #6f42c1;
+    --normal: #28a745;
+    --spectator: #f9844a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    font-size: 14px;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: white; border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .stats { color: var(--muted); font-size: 13px; }
+  .filters { display: flex; gap: 8px; align-items: center; margin-left: auto; flex-wrap: wrap; }
+  .filters input[type=search] {
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px;
+    width: 240px;
+  }
+  .filters select {
+    padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px;
+  }
+  .filters label { font-size: 12px; color: var(--muted); }
+  .pill {
+    display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    font-weight: 600; color: white; text-transform: uppercase;
+  }
+  .pill.normal    { background: var(--normal); }
+  .pill.noop      { background: var(--noop); }
+  .pill.stereo    { background: var(--stereo); }
+  .pill.spectator { background: var(--spectator); }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 16px 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .cluster {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .cluster-head {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .cluster-head .rank { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .cluster-head .size { font-weight: 600; font-size: 14px; }
+  .cluster-head .consensus { color: var(--muted); font-size: 12px; }
+  .cluster-head .consensus strong { color: var(--text); }
+  .sig-string {
+    padding: 8px 14px;
+    background: #f6f8fa;
+    border-bottom: 1px solid var(--border);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    color: var(--muted);
+    overflow-x: auto;
+    line-height: 1.5;
+  }
+  .sig-string > div {
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .sig-string span { font-size: 10px; padding-right: 4px; }
+  .top-labels {
+    padding: 6px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    display: flex; gap: 8px; flex-wrap: wrap;
+    background: #fafbfc;
+  }
+  .top-labels .lbl {
+    padding: 2px 8px; border: 1px solid var(--border); border-radius: 10px;
+    background: white;
+    font-variant-numeric: tabular-nums;
+  }
+  .top-labels .lbl strong { color: var(--accent); }
+  .examples {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 10px;
+    padding: 10px;
+  }
+  .example {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px;
+    background: white;
+  }
+  .example .meta {
+    display: flex; justify-content: space-between; gap: 6px;
+    font-size: 11px; color: var(--muted); margin-bottom: 4px;
+  }
+  .example .meta .id {
+    color: var(--accent); text-decoration: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 200px;
+  }
+  .example .meta .cat { font-weight: 600; }
+  .example .meta .name { color: var(--text); }
+  .rxn-svg {
+    width: 100%;
+    background: white;
+    overflow-x: auto;
+    text-align: center;
+    padding: 4px 0;
+  }
+  .rxn-svg svg { max-width: 100%; height: auto; }
+  .arrow { color: var(--muted); padding: 0 6px; font-size: 16px; }
+  .reactants, .products {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+  .rxn-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .smi {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 10px;
+    color: var(--muted);
+    word-break: break-all;
+    margin-top: 4px;
+    line-height: 1.3;
+    max-height: 36px;
+    overflow: hidden;
+  }
+  .loading { text-align: center; padding: 60px; color: var(--muted); }
+  .error { background: #ffeef0; padding: 8px; border-radius: 4px; color: #d73a49; font-size: 12px; }
+  button.load-more {
+    display: block; margin: 20px auto; padding: 10px 24px;
+    background: var(--accent); color: white; border: none; border-radius: 4px;
+    cursor: pointer; font-size: 14px; font-weight: 600;
+  }
+  button.load-more:hover { opacity: 0.9; }
+  button.load-more:disabled { opacity: 0.5; cursor: default; }
+</style>
+</head>
+<body>
+<header>
+  <h1>CRS Clusters — Pistachio v7 · r=0..r=3 bundle</h1>
+  <div class="stats" id="stats">Loading…</div>
+  <div class="filters">
+    <input type="search" id="searchBox" placeholder="Search signature, label, ID…" />
+    <select id="kindFilter">
+      <option value="">All kinds</option>
+      <option value="normal">Normal CRS</option>
+      <option value="noop">Failed (noop)</option>
+      <option value="stereo">Stereoselective</option>
+      <option value="spectator">Spectator-only</option>
+    </select>
+    <label>Per page:
+      <select id="perPage">
+        <option>20</option>
+        <option selected>50</option>
+        <option>100</option>
+      </select>
+    </label>
+  </div>
+</header>
+
+<div id="grid" class="grid">
+  <div class="loading">Loading clusters…</div>
+</div>
+<button id="loadMore" class="load-more" style="display:none">Show more</button>
+
+<script>
+const DATA_URL = "../data/results/cluster_top1000.json";
+
+let allClusters = [];
+let filteredClusters = [];
+let renderedCount = 0;
+
+const $stats = document.getElementById('stats');
+const $grid = document.getElementById('grid');
+const $loadMore = document.getElementById('loadMore');
+const $search = document.getElementById('searchBox');
+const $kind = document.getElementById('kindFilter');
+const $perPage = document.getElementById('perPage');
+
+function classifySig(sig) {
+  if (sig.includes('|noop')) return 'noop';
+  if (sig.includes('|st:'))  return 'stereo';
+  if (sig.startsWith('|s:')) return 'spectator';
+  return 'normal';
+}
+
+// Render a SMILES fragment (single mol) to SVG via OpenChemLib.
+let __svgCounter = 0;
+let __renderStats = { ok: 0, parseFail: 0, drawFail: 0, oclMissing: 0 };
+
+function smilesToSvg(smi, w=180, h=140) {
+  if (!smi || smi.trim() === '') return null;
+  if (typeof OCL === 'undefined' || !OCL.Molecule) {
+    __renderStats.oclMissing++;
+    return null;
+  }
+  let mol;
+  try {
+    // Strip atom-map numbers for cleaner rendering. Maps don't affect
+    // chemistry visualization and OCL's drawer mostly ignores them but
+    // strict bracket atoms with maps occasionally trip the parser.
+    const cleaned = smi.replace(/:\d+\]/g, ']');
+    mol = OCL.Molecule.fromSmiles(cleaned);
+    if (!mol || mol.getAllAtoms() === 0) {
+      __renderStats.parseFail++;
+      return null;
+    }
+  } catch (e) {
+    __renderStats.parseFail++;
+    if (__renderStats.parseFail < 3) console.warn('SMILES parse fail:', smi.slice(0,80), e.message);
+    return null;
+  }
+  try {
+    const id = 'm' + (__svgCounter++);
+    const svg = mol.toSVG(w, h, id, {
+      suppressChiralText: true,
+      suppressESR: true,
+      noStereoProblem: true,
+      autoCrop: true,
+      autoCropMargin: 4,
+    });
+    __renderStats.ok++;
+    return svg;
+  } catch (e) {
+    __renderStats.drawFail++;
+    if (__renderStats.drawFail < 3) console.warn('SVG draw fail:', smi.slice(0,80), e.message);
+    return null;
+  }
+}
+
+// Render a reaction SMILES (lhs>>rhs) as side-by-side mol SVGs.
+function rxnToHTML(rxn) {
+  if (!rxn || !rxn.includes('>>')) return `<div class="error">no reaction</div>`;
+  const [lhs, rhs] = rxn.split('>>', 2);
+  const lhsFrags = lhs.split('.').filter(Boolean);
+  const rhsFrags = rhs.split('.').filter(Boolean);
+
+  const renderFrag = (smi) => {
+    const svg = smilesToSvg(smi);
+    if (svg) {
+      return `<div class="frag">${svg}</div>`;
+    }
+    // Fallback: show SMILES text if rendering fails
+    return `<div class="frag" style="font-size:10px;color:#586069;padding:8px;border:1px dashed #ccc;border-radius:3px;">${escapeHtml(smi.slice(0,40))}${smi.length>40?'…':''}</div>`;
+  };
+
+  return `
+    <div class="rxn-row">
+      <div class="reactants">${lhsFrags.map(renderFrag).join('<span class="plus" style="color:#586069">+</span>')}</div>
+      <div class="arrow">→</div>
+      <div class="products">${rhsFrags.map(renderFrag).join('<span class="plus" style="color:#586069">+</span>')}</div>
+    </div>
+  `;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+function renderCluster(c, rank) {
+  const kind = c.kind || classifySig(c.sig);
+  const labelHtml = (c.top_labels || [])
+    .map(l => `<span class="lbl"><strong>${escapeHtml(l.cat)}</strong> ×${l.n.toLocaleString()}</span>`)
+    .join('');
+
+  const examples = (c.examples || []).map(ex => `
+    <div class="example">
+      <div class="meta">
+        <span class="id" title="${escapeHtml(ex.id)}">${escapeHtml(ex.id)}</span>
+        <span><span class="cat">${escapeHtml(ex.cat)}</span> · <span class="name">${escapeHtml(ex.name||'')}</span></span>
+      </div>
+      <div class="rxn-svg">${rxnToHTML(ex.rxn)}</div>
+    </div>
+  `).join('');
+
+  return `
+    <div class="cluster" data-kind="${kind}">
+      <div class="cluster-head">
+        <span class="rank">#${rank}</span>
+        <span class="pill ${kind}">${kind}</span>
+        <span class="size">${c.size.toLocaleString()} reactions</span>
+        <span class="consensus">consensus <strong>${escapeHtml(c.consensus_label)}</strong> (${(c.consensus_frac*100).toFixed(0)}%)</span>
+      </div>
+      <div class="sig-string">${
+        c.sig.split('\t').map((s, i) =>
+          `<div><span style="color:#959da5">r=${i}</span> ${escapeHtml(s)}</div>`
+        ).join('')
+      }</div>
+      <div class="top-labels">${labelHtml}</div>
+      <div class="examples">${examples}</div>
+    </div>
+  `;
+}
+
+function applyFilters() {
+  const q = $search.value.trim().toLowerCase();
+  const kind = $kind.value;
+  filteredClusters = allClusters.filter(c => {
+    if (kind && classifySig(c.sig) !== kind) return false;
+    if (!q) return true;
+    if (c.sig.toLowerCase().includes(q)) return true;
+    if (c.consensus_label.toLowerCase().includes(q)) return true;
+    if ((c.top_labels||[]).some(l => l.cat.toLowerCase().includes(q))) return true;
+    if ((c.examples||[]).some(e =>
+        e.id.toLowerCase().includes(q) ||
+        (e.name||'').toLowerCase().includes(q))) return true;
+    return false;
+  });
+  renderedCount = 0;
+  $grid.innerHTML = '';
+  renderNext();
+  updateStats();
+}
+
+function renderNext() {
+  const perPage = parseInt($perPage.value, 10);
+  const slice = filteredClusters.slice(renderedCount, renderedCount + perPage);
+  const html = slice.map((c, i) =>
+    renderCluster(c, allClusters.indexOf(c) + 1)
+  ).join('');
+  $grid.insertAdjacentHTML('beforeend', html);
+  renderedCount += slice.length;
+  $loadMore.style.display = (renderedCount < filteredClusters.length) ? '' : 'none';
+}
+
+function updateStats() {
+  const t = filteredClusters.reduce((a,c)=>a+c.size, 0);
+  $stats.textContent = `${filteredClusters.length} clusters · ${t.toLocaleString()} reactions`;
+}
+
+async function init() {
+  // Verify OCL is loaded before fetching data — otherwise nothing
+  // renders and the user sees only SMILES fallbacks (the failure mode
+  // we hit on the previous build).
+  if (typeof OCL === 'undefined' || !OCL.Molecule) {
+    $grid.innerHTML = `<div class="error">OpenChemLib failed to load. Check the browser console; the CDN may be blocked. The page will still render SMILES text fallbacks.</div>`;
+  } else {
+    // Smoke-test render to catch silent toSVG failures early
+    try {
+      const test = OCL.Molecule.fromSmiles('CCO').toSVG(80, 60, 'smoketest');
+      console.log('OCL ready (test SVG length:', test?.length, ')');
+    } catch (e) {
+      console.warn('OCL smoke test failed:', e);
+    }
+  }
+
+  try {
+    const resp = await fetch(DATA_URL);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} loading ${DATA_URL}`);
+    const data = await resp.json();
+    allClusters = data.clusters;
+    filteredClusters = allClusters.slice();
+    $stats.textContent = `${data.meta.total_clusters.toLocaleString()} total clusters · top ${data.meta.top_k} loaded · ${data.meta.total_reactions.toLocaleString()} reactions, full r=0..r=3 bundle`;
+    $grid.innerHTML = '';
+    renderNext();
+    // Surface render stats in the header after first batch
+    setTimeout(() => {
+      const s = __renderStats;
+      const total = s.ok + s.parseFail + s.drawFail + s.oclMissing;
+      if (total > 0) {
+        $stats.textContent += ` · render ${s.ok}/${total} ok`;
+        if (s.parseFail) $stats.textContent += `, ${s.parseFail} parse-fail`;
+        if (s.drawFail) $stats.textContent += `, ${s.drawFail} draw-fail`;
+        if (s.oclMissing) $stats.textContent += `, ${s.oclMissing} OCL-missing`;
+      }
+    }, 500);
+  } catch (e) {
+    $grid.innerHTML = `<div class="error">Failed to load data: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+$loadMore.addEventListener('click', renderNext);
+$search.addEventListener('input', () => {
+  clearTimeout(window.__filterDebounce);
+  window.__filterDebounce = setTimeout(applyFilters, 200);
+});
+$kind.addEventListener('change', applyFilters);
+$perPage.addEventListener('change', applyFilters);
+
+init();
+</script>
+</body>
+</html>
